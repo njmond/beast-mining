@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>BEAST Mining</title>
+  <meta property="fc:frame" content="vNext"/>
+  <meta property="fc:frame:image" content="https://YOUR_VERCEL_URL/og-image.png"/>
+  <meta property="fc:frame:button:1" content="🐉 Play BEAST Mining"/>
+  <meta property="fc:frame:button:1:action" content="launch_frame"/>
+  <meta property="fc:frame:button:1:target" content="https://YOUR_VERCEL_URL"/>
+  <meta name="fc:miniapp" content='{"version":"1","name":"BEAST Mining","iconUrl":"https://YOUR_VERCEL_URL/icon.png","homeUrl":"https://YOUR_VERCEL_URL","description":"5x5 grid mining game on Base!"}' />
+  <meta property="og:title" content="BEAST Mining"/>
+  <meta property="og:description" content="5x5 grid mining game on Base!"/>
+  <meta property="og:image" content="https://YOUR_VERCEL_URL/og-image.png"/>
+  <script src="https://cdn.jsdelivr.net/npm/@farcaster/frame-sdk/dist/index.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.9.0/ethers.umd.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0a0a0f;color:#e2e8f0;font-family:'Segoe UI',sans-serif;min-height:100vh;padding-bottom:20px}
+
+    /* Header */
+    .header{background:linear-gradient(135deg,#1a0a2e,#0f1a2e);border-bottom:1px solid #2d2d4e;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+    .logo{font-size:18px;font-weight:800;background:linear-gradient(90deg,#a855f7,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .header-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .conn-btn{background:linear-gradient(135deg,#a855f7,#3b82f6);border:none;color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-weight:600;font-size:11px}
+    .lang-sel{background:#1f2937;border:1px solid #374151;color:#e2e8f0;padding:6px 8px;border-radius:8px;font-size:11px;cursor:pointer}
+
+    /* Tabs */
+    .tabs{display:flex;background:#111827;border-bottom:1px solid #1f2937;overflow-x:auto}
+    .tab{flex:1;min-width:80px;padding:10px 8px;text-align:center;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+    .tab.active{color:#a855f7;border-bottom-color:#a855f7}
+
+    .main{max-width:500px;margin:0 auto;padding:12px}
+    .page{display:none}.page.active{display:block}
+
+    /* Stats */
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+    .stat{background:#111827;border:1px solid #1f2937;border-radius:10px;padding:10px;text-align:center}
+    .stat-label{font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+    .stat-value{font-size:15px;font-weight:700;color:#a855f7}
+
+    /* Card */
+    .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:14px;margin-bottom:12px}
+    .card-title{font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+
+    /* Timer */
+    .timer{text-align:center;margin-bottom:12px}
+    .timer-val{font-size:36px;font-weight:800;color:#a855f7}
+    .timer-bar{height:4px;background:#1f2937;border-radius:2px;margin-top:6px;overflow:hidden}
+    .timer-fill{height:100%;background:linear-gradient(90deg,#a855f7,#3b82f6);transition:width 1s linear}
+
+    /* Grid */
+    .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:10px}
+    .block{aspect-ratio:1;border-radius:6px;border:2px solid #1f2937;background:#0f172a;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:all .15s;user-select:none;position:relative;overflow:hidden}
+    .block:hover{border-color:#a855f7;background:#1a0a2e}
+    .block.selected{border-color:#a855f7;background:#2d1a4e}
+    .block.hot{border-color:#ef4444;background:#1a0505}
+    .block.warm{border-color:#f97316;background:#1a0d05}
+    .block.cool{border-color:#3b82f6;background:#0f1a3e}
+    .block.selected.hot,.block.selected.warm,.block.selected.cool{border-color:#a855f7;background:#2d1a4e}
+    .block.winning{border-color:#22c55e;background:#052e16;animation:glow 1s ease-in-out infinite}
+    @keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+
+    /* Heat bar inside block */
+    .block-heat{position:absolute;bottom:0;left:0;height:3px;background:linear-gradient(90deg,#a855f7,#ef4444);transition:width .5s}
+
+    .block-id{font-size:9px;color:#9ca3af;font-weight:600;z-index:1}
+    .block-eth{font-size:7px;color:#60a5fa;margin-top:1px;z-index:1}
+    .block-players{font-size:7px;color:#a78bfa;z-index:1}
+
+    /* Legend */
+    .legend{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+    .legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:#6b7280}
+    .legend-dot{width:8px;height:8px;border-radius:2px}
+
+    .sel-info{font-size:11px;color:#6b7280;margin-bottom:8px}
+    .eth-in{width:100%;background:#0f172a;border:1px solid #1f2937;color:#e2e8f0;padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:8px}
+    .eth-in:focus{outline:none;border-color:#a855f7}
+    .deploy-btn{width:100%;padding:11px;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;background:linear-gradient(135deg,#a855f7,#3b82f6);color:#fff}
+    .deploy-btn:disabled{opacity:.4;cursor:not-allowed}
+    .status{background:#1f2937;border-radius:7px;padding:7px 10px;font-size:11px;color:#9ca3af;margin-top:8px;text-align:center}
+
+    /* Rewards */
+    .reward-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #1f2937;font-size:12px}
+    .reward-row:last-child{border-bottom:none}
+    .rl{color:#6b7280}.rv{color:#a855f7;font-weight:600}
+    .claim-btn{width:100%;padding:9px;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;margin-top:8px;background:#1f2937;color:#e2e8f0}
+    .claim-btn:hover{background:#374151}
+    .share-btn{width:100%;padding:9px;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;margin-top:8px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;display:none}
+    .share-btn.visible{display:block}
+
+    /* History log */
+    .log{max-height:150px;overflow-y:auto}
+    .log-item{padding:6px 0;border-bottom:1px solid #1f2937;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}
+    .log-item.win{color:#22c55e}
+
+    /* Leaderboard */
+    .lb-filter{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+    .lb-filter-btn{padding:5px 12px;border-radius:20px;border:1px solid #374151;background:#1f2937;color:#9ca3af;font-size:11px;cursor:pointer}
+    .lb-filter-btn.active{background:#a855f7;border-color:#a855f7;color:#fff}
+
+    .lb-table{width:100%;border-collapse:collapse}
+    .lb-table th{font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;padding:6px 8px;text-align:left;border-bottom:1px solid #1f2937}
+    .lb-table td{padding:8px;font-size:11px;border-bottom:1px solid #111827}
+    .lb-rank{font-weight:700;color:#a855f7;width:30px}
+    .lb-addr{font-family:monospace;color:#e2e8f0}
+    .lb-wins{color:#22c55e;font-weight:600}
+    .lb-eth{color:#60a5fa;font-weight:600}
+    .lb-wr{color:#f59e0b}
+    .lb-crown{margin-right:4px}
+    .lb-empty{text-align:center;padding:20px;color:#6b7280;font-size:12px}
+    .lb-loading{text-align:center;padding:16px;color:#6b7280;font-size:11px}
+
+    /* My stats */
+    .my-stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .my-stat{background:#0f172a;border:1px solid #1f2937;border-radius:8px;padding:10px;text-align:center}
+    .my-stat-label{font-size:9px;color:#6b7280;text-transform:uppercase;margin-bottom:4px}
+    .my-stat-value{font-size:16px;font-weight:700;color:#a855f7}
+
+    .refresh-btn{background:none;border:1px solid #374151;color:#6b7280;padding:4px 10px;border-radius:6px;font-size:10px;cursor:pointer}
+    .refresh-btn:hover{border-color:#a855f7;color:#a855f7}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">🐉 BEAST</div>
+  <div class="header-right">
+    <select class="lang-sel" onchange="changeLang(this.value)" id="lang-sel">
+      <option value="en">🇺🇸 EN</option>
+      <option value="fil">🇵🇭 FIL</option>
+      <option value="vi">🇻🇳 VI</option>
+      <option value="zh">🇨🇳 ZH</option>
+      <option value="ru">🇷🇺 RU</option>
+    </select>
+    <span id="wallet-addr" style="font-size:10px;color:#6b7280"></span>
+    <button class="conn-btn" id="conn-btn" onclick="connectWallet()">Connect</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="showTab('play',this)" id="tab-play">⚔️ Play</div>
+  <div class="tab" onclick="showTab('rewards',this)" id="tab-rewards">💰 Rewards</div>
+  <div class="tab" onclick="showTab('leaderboard',this)" id="tab-lb">🏆 Leaderboard</div>
+  <div class="tab" onclick="showTab('history',this)" id="tab-hist">📜 History</div>
+</div>
+
+<div class="main">
+
+  <!-- Stats bar -->
+  <div class="stats">
+    <div class="stat"><div class="stat-label" id="lbl-round">Round</div><div class="stat-value" id="s-round">#—</div></div>
+    <div class="stat"><div class="stat-label" id="lbl-pool">Pool</div><div class="stat-value" id="s-pool">0 ETH</div></div>
+    <div class="stat"><div class="stat-label" id="lbl-players">Players</div><div class="stat-value" id="s-players">0</div></div>
+  </div>
+
+  <!-- ── PLAY PAGE ──────────────────────────────────────────────────────── -->
+  <div class="page active" id="page-play">
+    <div class="card">
+      <div class="card-title">
+        <span id="lbl-grid">Grid 5×5 — Choose Your Block</span>
+        <button class="refresh-btn" onclick="loadAll()">↻</button>
+      </div>
+      <div class="timer">
+        <div style="font-size:10px;color:#6b7280;margin-bottom:2px" id="lbl-timer">Round ends in</div>
+        <div class="timer-val" id="timer">--</div>
+        <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
+      </div>
+
+      <!-- Heat legend -->
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div><span id="lbl-hot">Hot (many players)</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div><span id="lbl-cool">Active</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1f2937"></div><span id="lbl-empty-block">Empty</span></div>
+      </div>
+
+      <div class="grid" id="grid"></div>
+      <div class="sel-info" id="sel-info">No blocks selected</div>
+      <input class="eth-in" type="number" id="eth-in" placeholder="Total ETH (e.g. 0.0000175)" step="0.0000001"/>
+      <button class="deploy-btn" id="deploy-btn" onclick="deployETH()">⚡ Deploy ETH</button>
+      <div class="status" id="status">Connect wallet to play</div>
+    </div>
+  </div>
+
+  <!-- ── REWARDS PAGE ───────────────────────────────────────────────────── -->
+  <div class="page" id="page-rewards">
+    <div class="card">
+      <div class="card-title" id="lbl-myrewards">My Rewards</div>
+      <div class="reward-row"><span class="rl" id="lbl-pendingeth">Pending ETH</span><span class="rv" id="r-eth">0</span></div>
+      <div class="reward-row"><span class="rl" id="lbl-mybet">My bet this round</span><span class="rv" id="r-mybet">—</span></div>
+      <div class="reward-row"><span class="rl" id="lbl-myblocks">My blocks</span><span class="rv" id="r-myblocks">—</span></div>
+      <button class="claim-btn" id="claim-btn" onclick="claimETH()">💰 Claim ETH</button>
+      <button class="share-btn" id="share-btn" onclick="shareToFarcaster()">🟣 Share to Farcaster</button>
+    </div>
+    <div class="card">
+      <div class="card-title" id="lbl-mystats">My Stats</div>
+      <div class="my-stats-grid">
+        <div class="my-stat"><div class="my-stat-label" id="lbl-totalrounds">Rounds Played</div><div class="my-stat-value" id="ms-rounds">—</div></div>
+        <div class="my-stat"><div class="my-stat-label" id="lbl-totalwins">Total Wins</div><div class="my-stat-value" id="ms-wins">—</div></div>
+        <div class="my-stat"><div class="my-stat-label" id="lbl-winrate">Win Rate</div><div class="my-stat-value" id="ms-wr">—</div></div>
+        <div class="my-stat"><div class="my-stat-label" id="lbl-totalearned">Total Earned</div><div class="my-stat-value" id="ms-earned">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LEADERBOARD PAGE ───────────────────────────────────────────────── -->
+  <div class="page" id="page-leaderboard">
+    <div class="card">
+      <div class="card-title">
+        <span id="lbl-lb">🏆 Leaderboard</span>
+        <button class="refresh-btn" onclick="loadLeaderboard()">↻</button>
+      </div>
+      <div class="lb-filter">
+        <button class="lb-filter-btn active" onclick="setLbFilter('wins',this)" id="lbf-wins">🏆 Most Wins</button>
+        <button class="lb-filter-btn" onclick="setLbFilter('eth',this)" id="lbf-eth">💰 Most ETH</button>
+        <button class="lb-filter-btn" onclick="setLbFilter('wr',this)" id="lbf-wr">📈 Win Rate</button>
+      </div>
+      <div id="lb-content">
+        <div class="lb-loading" id="lbl-lb-loading">Loading leaderboard...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── HISTORY PAGE ───────────────────────────────────────────────────── -->
+  <div class="page" id="page-history">
+    <div class="card">
+      <div class="card-title">
+        <span id="lbl-history">Round History</span>
+        <button class="refresh-btn" onclick="loadLog()">↻</button>
+      </div>
+      <div class="log" id="log" style="max-height:400px">
+        <div class="log-item"><span id="lbl-loading">Loading...</span></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const CONTRACT_ADDRESS = "0x9Edf67910Cb85f1F32698862e124052A3425B79A";
+const SITE_URL = "https://YOUR_VERCEL_URL";
+const SCAN_DEPTH = 30; // rounds to scan for leaderboard
+
+const ABI = [
+  "function deploy(uint8[] calldata blockIds) payable",
+  "function claimETH()",
+  "function getCurrentRoundInfo() view returns (uint64,uint256,uint256,uint256,uint256,bool)",
+  "function getRoundBlocks(uint64) view returns (uint256[25])",
+  "function getMinerInfo(uint64,address) view returns (bool,uint256,uint256)",
+  "function getRoundResult(uint64) view returns (bool,uint8,uint256,uint256,uint256)",
+  "function getRoundMiners(uint64) view returns (address[])",
+  "function minerOnBlock(uint64,uint8,address) view returns (uint256)",
+  "function pendingETH(address) view returns (uint256)",
+  "function totalRoundsPlayed() view returns (uint256)"
+];
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+const LANG = {
+  en:{
+    round:'Round',pool:'Pool',players:'Players',
+    grid:'Grid 5×5 — Choose Your Block',timerLabel:'Round ends in',
+    hot:'Hot (many players)',cool:'Active',emptyBlock:'Empty',
+    noBlock:'No blocks selected',
+    selBlock:(n,min)=>`${n} block(s) selected | Min ETH: ${min}`,
+    placeholder:'Total ETH (e.g. 0.0000175)',deployBtn:'⚡ Deploy ETH',
+    connectMsg:'Connect wallet to play',connected:'Wallet connected!',
+    myrewards:'My Rewards',pendingEth:'Pending ETH',myBet:'My bet this round',
+    myBlocks:'My blocks',claimBtn:'💰 Claim ETH',shareBtn:'🟣 Share to Farcaster',
+    mystats:'My Stats',totalRounds:'Rounds Played',totalWins:'Total Wins',
+    winrate:'Win Rate',totalEarned:'Total Earned',
+    lb:'🏆 Leaderboard',lbLoading:'Loading leaderboard...',lbEmpty:'No data yet. Be the first to play!',
+    lbAddress:'Address',lbWins:'Wins',lbEth:'ETH Won',lbWR:'Win Rate',lbRounds:'Rounds',
+    history:'Round History',loading:'Loading...',
+    deploying:'Waiting for confirmation...',sending:'Transaction sent...',
+    deployOk:(b)=>`✅ Deployed to [${b}]!`,claimedOk:'✅ ETH claimed!',
+    claiming:'Claiming ETH...',nothing:'ℹ️ Nothing to claim.',
+    err:(m)=>`❌ ${m}`,noWallet:'Install MetaMask!',
+    shareText:(r,p)=>`🐉 Playing BEAST Mining!\nRound #${r} | Pool: ${p}\n${SITE_URL}`,
+    histItem:(i,b,p,w)=>`Round #${i} → Block #${b} | ${p} ETH ${w?'🏆':''}`,
+    noHistory:'No history yet',
+  },
+  fil:{
+    round:'Round',pool:'Pool',players:'Mga Manlalaro',
+    grid:'Grid 5×5 — Piliin ang Block Mo',timerLabel:'Magtatapos ang round sa',
+    hot:'Mainit (maraming manlalaro)',cool:'Aktibo',emptyBlock:'Walang laman',
+    noBlock:'Walang napiling block',
+    selBlock:(n,min)=>`${n} block(s) napili | Min ETH: ${min}`,
+    placeholder:'Kabuuang ETH (hal. 0.0000175)',deployBtn:'⚡ I-deploy ang ETH',
+    connectMsg:'I-connect ang wallet para maglaro',connected:'Nakakonekta na!',
+    myrewards:'Aking Mga Reward',pendingEth:'Nakabinbing ETH',myBet:'Aking taya ngayong round',
+    myBlocks:'Aking mga block',claimBtn:'💰 I-claim ang ETH',shareBtn:'🟣 I-share sa Farcaster',
+    mystats:'Aking Stats',totalRounds:'Rounds na Nilaro',totalWins:'Kabuuang Panalo',
+    winrate:'Win Rate',totalEarned:'Kabuuang Kinita',
+    lb:'🏆 Leaderboard',lbLoading:'Nilo-load ang leaderboard...',lbEmpty:'Wala pang data. Maging una!',
+    lbAddress:'Address',lbWins:'Panalo',lbEth:'ETH Nakuha',lbWR:'Win Rate',lbRounds:'Rounds',
+    history:'Kasaysayan ng Round',loading:'Naglo-load...',
+    deploying:'Naghihintay ng kumpirmasyon...',sending:'Naipadala na...',
+    deployOk:(b)=>`✅ Na-deploy sa [${b}]!`,claimedOk:'✅ Na-claim ang ETH!',
+    claiming:'Nag-claim...',nothing:'ℹ️ Walang i-claim.',
+    err:(m)=>`❌ ${m}`,noWallet:'Mag-install ng MetaMask!',
+    shareText:(r,p)=>`🐉 Naglalaro ng BEAST Mining!\nRound #${r} | Pool: ${p}\n${SITE_URL}`,
+    histItem:(i,b,p,w)=>`Round #${i} → Block #${b} | ${p} ETH ${w?'🏆':''}`,
+    noHistory:'Wala pang kasaysayan',
+  },
+  vi:{
+    round:'Vòng',pool:'Quỹ',players:'Người chơi',
+    grid:'Lưới 5×5 — Chọn Ô Của Bạn',timerLabel:'Vòng kết thúc sau',
+    hot:'Nóng (nhiều người chơi)',cool:'Đang hoạt động',emptyBlock:'Trống',
+    noBlock:'Chưa chọn ô nào',
+    selBlock:(n,min)=>`Đã chọn ${n} ô | ETH tối thiểu: ${min}`,
+    placeholder:'Tổng ETH (vd: 0.0000175)',deployBtn:'⚡ Đặt cược ETH',
+    connectMsg:'Kết nối ví để chơi',connected:'Đã kết nối ví!',
+    myrewards:'Phần Thưởng',pendingEth:'ETH chờ nhận',myBet:'Cược vòng này',
+    myBlocks:'Ô của tôi',claimBtn:'💰 Nhận ETH',shareBtn:'🟣 Chia sẻ Farcaster',
+    mystats:'Thống Kê Của Tôi',totalRounds:'Số Vòng Đã Chơi',totalWins:'Tổng Thắng',
+    winrate:'Tỷ Lệ Thắng',totalEarned:'Tổng Đã Kiếm',
+    lb:'🏆 Bảng Xếp Hạng',lbLoading:'Đang tải...',lbEmpty:'Chưa có dữ liệu. Hãy là người đầu tiên!',
+    lbAddress:'Địa chỉ',lbWins:'Thắng',lbEth:'ETH Thắng',lbWR:'Tỷ lệ',lbRounds:'Vòng',
+    history:'Lịch Sử Vòng',loading:'Đang tải...',
+    deploying:'Đang chờ xác nhận...',sending:'Đã gửi giao dịch...',
+    deployOk:(b)=>`✅ Đã đặt vào [${b}]!`,claimedOk:'✅ Đã nhận ETH!',
+    claiming:'Đang nhận...',nothing:'ℹ️ Không có ETH để nhận.',
+    err:(m)=>`❌ ${m}`,noWallet:'Vui lòng cài MetaMask!',
+    shareText:(r,p)=>`🐉 Đang chơi BEAST Mining!\nVòng #${r} | Quỹ: ${p}\n${SITE_URL}`,
+    histItem:(i,b,p,w)=>`Vòng #${i} → Ô #${b} | ${p} ETH ${w?'🏆':''}`,
+    noHistory:'Chưa có lịch sử',
+  },
+  zh:{
+    round:'轮次',pool:'奖池',players:'玩家数',
+    grid:'5×5方格 — 选择你的方块',timerLabel:'本轮结束倒计时',
+    hot:'热门（多人选择）',cool:'有人选择',emptyBlock:'空方块',
+    noBlock:'未选择方块',
+    selBlock:(n,min)=>`已选 ${n} 个 | 最低ETH: ${min}`,
+    placeholder:'总ETH金额 (例: 0.0000175)',deployBtn:'⚡ 投入ETH',
+    connectMsg:'连接钱包开始游戏',connected:'钱包已连接！',
+    myrewards:'我的奖励',pendingEth:'待领取ETH',myBet:'本轮我的投注',
+    myBlocks:'我的方块',claimBtn:'💰 领取ETH',shareBtn:'🟣 分享到Farcaster',
+    mystats:'我的统计',totalRounds:'参与轮数',totalWins:'总获胜',
+    winrate:'胜率',totalEarned:'总收益',
+    lb:'🏆 排行榜',lbLoading:'加载排行榜中...',lbEmpty:'暂无数据，成为第一个玩家！',
+    lbAddress:'地址',lbWins:'获胜',lbEth:'ETH收益',lbWR:'胜率',lbRounds:'轮数',
+    history:'历史记录',loading:'加载中...',
+    deploying:'等待确认...',sending:'交易已发送...',
+    deployOk:(b)=>`✅ 已投入方块 [${b}]！`,claimedOk:'✅ ETH领取成功！',
+    claiming:'领取中...',nothing:'ℹ️ 没有可领取的ETH。',
+    err:(m)=>`❌ ${m}`,noWallet:'请安装MetaMask！',
+    shareText:(r,p)=>`🐉 正在玩BEAST Mining！\n第${r}轮 | 奖池: ${p}\n${SITE_URL}`,
+    histItem:(i,b,p,w)=>`第${i}轮 → 方块#${b} | ${p} ETH ${w?'🏆':''}`,
+    noHistory:'暂无历史记录',
+  },
+  ru:{
+    round:'Раунд',pool:'Пул',players:'Игроки',
+    grid:'Сетка 5×5 — Выберите блок',timerLabel:'До конца раунда',
+    hot:'Горячий (много игроков)',cool:'Активный',emptyBlock:'Пустой',
+    noBlock:'Блоки не выбраны',
+    selBlock:(n,min)=>`Выбрано ${n} блок(ов) | Мин ETH: ${min}`,
+    placeholder:'Сумма ETH (напр. 0.0000175)',deployBtn:'⚡ Вложить ETH',
+    connectMsg:'Подключите кошелёк',connected:'Кошелёк подключён!',
+    myrewards:'Мои Награды',pendingEth:'Ожидающий ETH',myBet:'Моя ставка',
+    myBlocks:'Мои блоки',claimBtn:'💰 Получить ETH',shareBtn:'🟣 Farcaster',
+    mystats:'Моя Статистика',totalRounds:'Сыграно раундов',totalWins:'Побед',
+    winrate:'Винрейт',totalEarned:'Всего заработано',
+    lb:'🏆 Лидеры',lbLoading:'Загрузка...',lbEmpty:'Нет данных. Будьте первым!',
+    lbAddress:'Адрес',lbWins:'Победы',lbEth:'ETH',lbWR:'Винрейт',lbRounds:'Раунды',
+    history:'История раундов',loading:'Загрузка...',
+    deploying:'Ожидание подтверждения...',sending:'Транзакция отправлена...',
+    deployOk:(b)=>`✅ ETH вложен в [${b}]!`,claimedOk:'✅ ETH получен!',
+    claiming:'Получение ETH...',nothing:'ℹ️ Нет ETH для получения.',
+    err:(m)=>`❌ ${m}`,noWallet:'Установите MetaMask!',
+    shareText:(r,p)=>`🐉 Играю в BEAST Mining!\nРаунд #${r} | Пул: ${p}\n${SITE_URL}`,
+    histItem:(i,b,p,w)=>`Раунд #${i} → Блок #${b} | ${p} ETH ${w?'🏆':''}`,
+    noHistory:'История пуста',
+  }
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let provider,signer,contract;
+let selectedBlocks = new Set();
+let currentRoundId = 0n;
+let roundEndTime   = 0;
+let timerInterval;
+let isFarcaster    = false, fcSDK = null;
+let currentLang    = 'en';
+let lbFilter       = 'wins';
+let blockPlayerMap = {}; // blockId -> player count this round
+let lbData         = []; // leaderboard cache
+
+const T = () => LANG[currentLang] || LANG.en;
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showTab(name, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  el.classList.add('active');
+  if (name==='leaderboard') loadLeaderboard();
+  if (name==='history') loadLog();
+}
+
+// ── Language ──────────────────────────────────────────────────────────────────
+function changeLang(l) {
+  currentLang = l;
+  try { localStorage.setItem('beast_lang', l); } catch{}
+  applyLang();
+}
+
+function applyLang() {
+  const L = T();
+  const ids = {
+    'lbl-round':L.round,'lbl-pool':L.pool,'lbl-players':L.players,
+    'lbl-grid':L.grid,'lbl-timer':L.timerLabel,
+    'lbl-hot':L.hot,'lbl-cool':L.cool,'lbl-empty-block':L.emptyBlock,
+    'lbl-myrewards':L.myrewards,'lbl-pendingeth':L.pendingEth,
+    'lbl-mybet':L.myBet,'lbl-myblocks':L.myBlocks,
+    'claim-btn':L.claimBtn,'share-btn':L.shareBtn,
+    'lbl-mystats':L.mystats,'lbl-totalrounds':L.totalRounds,
+    'lbl-totalwins':L.totalWins,'lbl-winrate':L.winrate,'lbl-totalearned':L.totalEarned,
+    'lbl-lb':L.lb,'lbl-lb-loading':L.lbLoading,
+    'lbl-history':L.history,'lbl-loading':L.loading,
+    'deploy-btn':L.deployBtn,
+  };
+  for (const [id,val] of Object.entries(ids)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+  const ein = document.getElementById('eth-in');
+  if (ein) ein.placeholder = L.placeholder;
+  if (!signer) document.getElementById('status').textContent = L.connectMsg;
+  updateSelInfo();
+}
+
+// ── Farcaster ─────────────────────────────────────────────────────────────────
+async function initFarcaster() {
+  try {
+    if (window?.frames?.sdk) {
+      fcSDK = window.frames.sdk; isFarcaster = true;
+      await fcSDK.actions.ready();
+      document.getElementById('share-btn').classList.add('visible');
+      await connectFarcasterWallet();
+    }
+  } catch {}
+}
+
+async function connectFarcasterWallet() {
+  try {
+    const ep = await fcSDK.wallet.getEthereumProvider();
+    provider = new ethers.BrowserProvider(ep);
+    signer   = await provider.getSigner();
+    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+    const a  = await signer.getAddress();
+    document.getElementById('wallet-addr').textContent = a.slice(0,6)+'...'+a.slice(-4);
+    document.getElementById('conn-btn').textContent    = '✓';
+    document.getElementById('status').textContent      = T().connected;
+    loadAll();
+  } catch(e){console.error(e);}
+}
+
+async function shareToFarcaster() {
+  if (!fcSDK) return;
+  try {
+    const pool = document.getElementById('s-pool').textContent;
+    await fcSDK.actions.openUrl(
+      `https://warpcast.com/~/compose?text=${encodeURIComponent(T().shareText(currentRoundId.toString(),pool))}`
+    );
+  } catch{}
+}
+
+// ── Connect ───────────────────────────────────────────────────────────────────
+async function connectWallet() {
+  if (isFarcaster) return;
+  if (!window.ethereum) return alert(T().noWallet);
+  try {
+    await window.ethereum.request({method:'eth_requestAccounts'});
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer   = await provider.getSigner();
+    try {
+      await window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x2105'}]});
+    } catch {
+      await window.ethereum.request({method:'wallet_addEthereumChain',params:[{
+        chainId:'0x2105',chainName:'Base',rpcUrls:['https://mainnet.base.org'],
+        nativeCurrency:{name:'ETH',symbol:'ETH',decimals:18},
+        blockExplorerUrls:['https://basescan.org']
+      }]});
+    }
+    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+    const a  = await signer.getAddress();
+    document.getElementById('wallet-addr').textContent = a.slice(0,6)+'...'+a.slice(-4);
+    document.getElementById('conn-btn').textContent    = '✓';
+    document.getElementById('status').textContent      = T().connected;
+    loadAll();
+  } catch(e){alert(T().err(e.message));}
+}
+
+// ── Grid ──────────────────────────────────────────────────────────────────────
+async function renderGrid(blockData) {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  // Hitung max ETH untuk heat map
+  const amounts = blockData
+    ? Array.from(blockData).map(d => parseFloat(ethers.formatEther(d || 0n)))
+    : Array(25).fill(0);
+  const maxAmt   = Math.max(...amounts, 0.000001);
+  const maxPlayers = Math.max(...Object.values(blockPlayerMap), 1);
+
+  for (let i = 0; i < 25; i++) {
+    const amt     = amounts[i];
+    const players = blockPlayerMap[i] || 0;
+    const heat    = maxAmt > 0 ? amt / maxAmt : 0;
+    const div     = document.createElement('div');
+
+    let cls = 'block';
+    if (selectedBlocks.has(i)) cls += ' selected';
+    else if (heat > 0.66)      cls += ' hot';
+    else if (heat > 0)         cls += ' cool';
+
+    div.className = cls;
+    div.innerHTML =
+      `<span class="block-id">#${i}</span>` +
+      (amt > 0 ? `<span class="block-eth">${amt.toFixed(4)}</span>` : '') +
+      (players > 0 ? `<span class="block-players">👤${players}</span>` : '') +
+      (amt > 0 ? `<div class="block-heat" style="width:${Math.round(heat*100)}%"></div>` : '');
+
+    div.onclick = () => {
+      selectedBlocks.has(i) ? selectedBlocks.delete(i) : selectedBlocks.add(i);
+      updateSelInfo(); renderGrid(blockData);
+    };
+    grid.appendChild(div);
+  }
+}
+
+function updateSelInfo() {
+  const n   = selectedBlocks.size;
+  const min = (0.0000025 * Math.max(n,1)).toFixed(7);
+  document.getElementById('sel-info').textContent = n > 0 ? T().selBlock(n,min) : T().noBlock;
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+function startTimer(endTime) {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const rem = Math.max(0, endTime - Math.floor(Date.now()/1000));
+    document.getElementById('timer').textContent = rem+'s';
+    document.getElementById('timer-fill').style.width = Math.min(100,rem/60*100)+'%';
+    if (rem===0){clearInterval(timerInterval);setTimeout(loadAll,5000);}
+  },1000);
+}
+
+// ── Load All ──────────────────────────────────────────────────────────────────
+async function loadAll() {
+  if (!contract) return;
+  try {
+    const [info, blockData] = await Promise.all([
+      contract.getCurrentRoundInfo(),
+      contract.getRoundBlocks(currentRoundId || 1n).catch(()=>null)
+    ]);
+
+    currentRoundId = info[0];
+    roundEndTime   = Number(info[2]);
+
+    document.getElementById('s-round').textContent = '#'+currentRoundId;
+    document.getElementById('s-pool').textContent  = parseFloat(ethers.formatEther(info[3])).toFixed(5);
+    startTimer(roundEndTime);
+
+    // Get block data for current round
+    const bd = await contract.getRoundBlocks(currentRoundId);
+
+    // Get miners & count per block
+    blockPlayerMap = {};
+    try {
+      const miners = await contract.getRoundMiners(currentRoundId);
+      document.getElementById('s-players').textContent = miners.length;
+      // Count players per block
+      for (const miner of miners) {
+        for (let b = 0; b < 25; b++) {
+          try {
+            const amt = await contract.minerOnBlock(currentRoundId, b, miner);
+            if (amt > 0n) blockPlayerMap[b] = (blockPlayerMap[b]||0) + 1;
+          } catch{}
+        }
+      }
+    } catch{}
+
+    renderGrid(bd);
+
+    // My info
+    if (signer) {
+      const addr  = await signer.getAddress();
+      const mi    = await contract.getMinerInfo(currentRoundId, addr);
+      const pend  = parseFloat(ethers.formatEther(mi[2])).toFixed(6);
+      document.getElementById('r-eth').textContent = pend+' ETH';
+
+      if (mi[0]) {
+        const perBlk = parseFloat(ethers.formatEther(mi[1])).toFixed(6);
+        document.getElementById('r-mybet').textContent = perBlk+' ETH/block';
+        // Find which blocks
+        let myBlocks = [];
+        for (let b=0;b<25;b++){
+          try{
+            const a=await contract.minerOnBlock(currentRoundId,b,addr);
+            if(a>0n) myBlocks.push('#'+b);
+          }catch{}
+        }
+        document.getElementById('r-myblocks').textContent = myBlocks.join(', ')||'—';
+      } else {
+        document.getElementById('r-mybet').textContent    = '—';
+        document.getElementById('r-myblocks').textContent = '—';
+      }
+
+      // My stats (scan last SCAN_DEPTH rounds)
+      loadMyStats(addr);
+    }
+  } catch(e){console.error(e);}
+}
+
+// ── My Stats ──────────────────────────────────────────────────────────────────
+async function loadMyStats(addr) {
+  if (!contract || !addr) return;
+  try {
+    let rounds=0, wins=0, ethEarned=0;
+    const from = Number(currentRoundId)-1;
+    const count = Math.min(SCAN_DEPTH, from);
+    for (let i=from; i>from-count; i--) {
+      try {
+        const mi = await contract.getMinerInfo(BigInt(i), addr);
+        if (!mi[0]) continue;
+        rounds++;
+        const res = await contract.getRoundResult(BigInt(i));
+        if (!res[0]) continue;
+        const winBlock = Number(res[1]);
+        const myAmt    = await contract.minerOnBlock(BigInt(i), winBlock, addr);
+        if (myAmt > 0n) wins++;
+      } catch{}
+    }
+    const wr = rounds>0 ? ((wins/rounds)*100).toFixed(1) : '0';
+    document.getElementById('ms-rounds').textContent = rounds;
+    document.getElementById('ms-wins').textContent   = wins;
+    document.getElementById('ms-wr').textContent     = wr+'%';
+
+    // Pending ETH as earned proxy
+    const pend = await contract.pendingETH(addr);
+    document.getElementById('ms-earned').textContent = parseFloat(ethers.formatEther(pend)).toFixed(5)+' ETH';
+  } catch{}
+}
+
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+function setLbFilter(f, el) {
+  lbFilter = f;
+  document.querySelectorAll('.lb-filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderLeaderboard();
+}
+
+async function loadLeaderboard() {
+  if (!contract) return;
+  document.getElementById('lb-content').innerHTML =
+    `<div class="lb-loading">${T().lbLoading}</div>`;
+
+  const playerData = {}; // addr -> {wins, ethWon, rounds}
+
+  try {
+    const from  = Number(currentRoundId)-1;
+    const count = Math.min(SCAN_DEPTH, from);
+
+    for (let i=from; i>from-count; i--) {
+      try {
+        const [res, miners] = await Promise.all([
+          contract.getRoundResult(BigInt(i)),
+          contract.getRoundMiners(BigInt(i))
+        ]);
+        if (!res[0]) continue;
+        const winBlock  = Number(res[1]);
+        const winnersPool = res[4];
+
+        for (const miner of miners) {
+          if (!playerData[miner]) playerData[miner] = {wins:0, ethWon:0n, rounds:0};
+          playerData[miner].rounds++;
+          const myAmt = await contract.minerOnBlock(BigInt(i), winBlock, miner);
+          if (myAmt > 0n) {
+            playerData[miner].wins++;
+            // Proportional reward
+            const blockTotal = await contract.getRoundBlocks(BigInt(i))
+              .then(b=>b[winBlock]).catch(()=>0n);
+            if (blockTotal > 0n) {
+              const reward = winnersPool * myAmt / blockTotal;
+              playerData[miner].ethWon += reward;
+            }
+          }
+        }
+      } catch{}
+    }
+  } catch(e){console.error(e);}
+
+  lbData = Object.entries(playerData).map(([addr,d])=>({
+    addr,
+    wins    : d.wins,
+    rounds  : d.rounds,
+    ethWon  : d.ethWon,
+    winRate : d.rounds>0 ? (d.wins/d.rounds*100).toFixed(1) : '0'
+  }));
+
+  renderLeaderboard();
+}
+
+function renderLeaderboard() {
+  const L   = T();
+  const el  = document.getElementById('lb-content');
+
+  if (lbData.length === 0) {
+    el.innerHTML = `<div class="lb-empty">${L.lbEmpty}</div>`;
+    return;
+  }
+
+  // Sort
+  let sorted = [...lbData];
+  if (lbFilter==='wins')     sorted.sort((a,b)=>b.wins-a.wins);
+  else if (lbFilter==='eth') sorted.sort((a,b)=>Number(b.ethWon-a.ethWon));
+  else if (lbFilter==='wr')  sorted.sort((a,b)=>parseFloat(b.winRate)-parseFloat(a.winRate));
+  sorted = sorted.slice(0,20);
+
+  const medals = ['🥇','🥈','🥉'];
+  let html = `
+    <table class="lb-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>${L.lbAddress}</th>
+          <th>${L.lbWins}</th>
+          <th>${L.lbEth}</th>
+          <th>${L.lbWR}</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  sorted.forEach((p,idx)=>{
+    const rank  = medals[idx] || (idx+1);
+    const short = p.addr.slice(0,6)+'...'+p.addr.slice(-4);
+    const eth   = parseFloat(ethers.formatEther(p.ethWon)).toFixed(5);
+    html += `
+      <tr>
+        <td class="lb-rank">${rank}</td>
+        <td class="lb-addr">${short}</td>
+        <td class="lb-wins">${p.wins}</td>
+        <td class="lb-eth">${eth}</td>
+        <td class="lb-wr">${p.winRate}%</td>
+      </tr>
+    `;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+async function loadLog() {
+  if (!contract || currentRoundId<=1n) return;
+  const log  = document.getElementById('log');
+  log.innerHTML = '';
+  const from  = Number(currentRoundId)-1;
+  const count = Math.min(20, from);
+  let   myAddr = null;
+  if (signer) try{myAddr=await signer.getAddress();}catch{}
+
+  for (let i=from; i>from-count; i--) {
+    try {
+      const r = await contract.getRoundResult(BigInt(i));
+      if (!r[0]) continue;
+      const pool  = parseFloat(ethers.formatEther(r[2])).toFixed(5);
+      const didWin = myAddr
+        ? await contract.minerOnBlock(BigInt(i), Number(r[1]), myAddr).then(a=>a>0n).catch(()=>false)
+        : false;
+      const div = document.createElement('div');
+      div.className   = 'log-item'+(didWin?' win':'');
+      div.innerHTML   =
+        `<span>${T().histItem(i, r[1], pool, didWin)}</span>` +
+        `<span style="color:#374151;font-size:10px">#${i}</span>`;
+      log.appendChild(div);
+    } catch{}
+  }
+  if (!log.innerHTML) log.innerHTML = `<div class="log-item">${T().noHistory}</div>`;
+}
+
+// ── Deploy ────────────────────────────────────────────────────────────────────
+async function deployETH() {
+  if (!contract) return alert(T().connectMsg);
+  if (selectedBlocks.size===0) return alert(T().noBlock);
+  const eth = document.getElementById('eth-in').value;
+  if (!eth||parseFloat(eth)<=0) return alert(T().err('Enter ETH amount'));
+  const min = 0.0000025*selectedBlocks.size;
+  if (parseFloat(eth)<min) return alert(T().err(`Min: ${min.toFixed(7)} ETH`));
+  try {
+    document.getElementById('deploy-btn').disabled = true;
+    document.getElementById('status').textContent  = T().deploying;
+    const blocks = Array.from(selectedBlocks);
+    const tx     = await contract.deploy(blocks,{value:ethers.parseEther(eth)});
+    document.getElementById('status').textContent  = T().sending;
+    await tx.wait();
+    document.getElementById('status').textContent  = T().deployOk(blocks.join(','));
+    selectedBlocks.clear();
+    loadAll();
+  } catch(e){
+    document.getElementById('status').textContent = T().err((e.reason||e.message).slice(0,60));
+  } finally {
+    document.getElementById('deploy-btn').disabled=false;
+  }
+}
+
+// ── Claim ─────────────────────────────────────────────────────────────────────
+async function claimETH() {
+  if (!contract) return alert(T().connectMsg);
+  try {
+    document.getElementById('status').textContent = T().claiming;
+    const tx = await contract.claimETH();
+    await tx.wait();
+    document.getElementById('status').textContent = T().claimedOk;
+    loadAll();
+  } catch(e){
+    document.getElementById('status').textContent = T().err((e.reason||e.message).slice(0,60));
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+try{
+  const sl=localStorage.getItem('beast_lang');
+  if(sl&&LANG[sl]){currentLang=sl;document.getElementById('lang-sel').value=sl;}
+}catch{}
+
+applyLang();
+renderGrid(null);
+setInterval(()=>{if(contract)loadAll();},30000);
+initFarcaster();
+</script>
+</body>
+</html>
