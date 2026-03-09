@@ -1,0 +1,21 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjQxODQzOCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDkxMGFjYzQ1NDk3YjdEN2Y5M2U1ZjREYzREMEZjMGI3M2QzQjE2Y2YifQ",
+    "payload": "eyJkb21haW4iOiJiZWFzdC1taW5pbmcudmVyY2VsLmFwcCJ9",
+    "signature": "7xnYsbmeDD+K2O6iMoefwLb/khr7VWW1tI7cIjZ5mg0RRIGhE4eHw9jEMlpzmdrckss5X1trMoVE+bDy2kqQPRs="
+  },
+  "frame": {
+    "version": "1",
+    "name": "BEAST Mining",
+    "iconUrl": "https://beast-mining.vercel.app/icon.png",
+    "homeUrl": "https://beast-mining.vercel.app",
+    "imageUrl": "https://beast-mining.vercel.app/og-image.png",
+    "screenshotUrls": [],
+    "tags": ["game", "defi", "base", "mining"],
+    "primaryCategory": "games",
+    "description": "5x5 grid mining game on Base. Deploy ETH, win the pool every 60 seconds!",
+    "buttonTitle": "🐉 Play BEAST Mining",
+    "splashImageUrl": "https://beast-mining.vercel.app/og-image.png",
+    "splashBackgroundColor": "#0a0a0f"
+  }
+}
